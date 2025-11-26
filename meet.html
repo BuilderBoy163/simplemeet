@@ -89,151 +89,105 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL = 'https://wzaimsgnwsxgndlpyeiw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YWltc2dud3N4Z25kbHB5ZWl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxMDQwODMsImV4cCI6MjA3OTY4MDA4M30.FNIBYc0GikZTJnKHW5FiqBfs7MwSB5nlnoMIlEFl8v0';
-const supabase = createClient(SUPABASE_URL,SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const stunServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 const localV = document.getElementById('local');
 const grid = document.getElementById('grid');
 const statusEl = document.getElementById('status');
-const createOfferBtn = document.getElementById('createOffer');
-const remoteBlobTa = document.getElementById('remoteBlob');
-const acceptRemoteBtn = document.getElementById('acceptRemote');
 const chatArea = document.getElementById('chatArea');
 const chatInput = document.getElementById('chatInput');
 const sendChatBtn = document.getElementById('sendChat');
 const joinBtn = document.getElementById('joinBtn');
 const leaveBtn = document.getElementById('leaveBtn');
+const roomInput = document.getElementById('room');
 
-let localStream = null;
 let pc = null;
 let dc = null;
 let isOfferer = false;
-const peers = {};
+let localStream = null;
+let remoteVideoEl = null;
 
-function logStatus(s){ statusEl.textContent = s }
-function addChat(msg,from='me'){ const el = document.createElement('div'); el.textContent = (from? from+': ':'')+msg; el.style.padding='6px 4px'; el.style.fontSize='13px'; chatArea.appendChild(el); chatArea.scrollTop = chatArea.scrollHeight }
+function logStatus(msg){ statusEl.textContent = msg; }
+function addChat(msg, from='me'){ const d=document.createElement('div'); d.textContent=(from?from+': ':'')+msg; chatArea.appendChild(d); chatArea.scrollTop=chatArea.scrollHeight; }
 
-async function startLocal(){ try{ localStream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280}}, audio:true}); localV.srcObject = localStream; logStatus('Got local camera'); createOfferBtn.disabled = false; }catch(e){ alert('Camera/Mic not available: '+e.message) } }
-startLocal();
+async function startLocal(){
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    localV.srcObject = localStream;
+    logStatus('Camera & mic ready');
+  } catch(e){ alert('Cannot access camera/mic: '+e.message); }
+}
 
 function makePC(){
   const _pc = new RTCPeerConnection({iceServers:stunServers});
-  if(localStream) localStream.getTracks().forEach(t=>_pc.addTrack(t,localStream));
-
-  _pc.ontrack = (e)=>{
-    const id = 'peer-'+Math.random().toString(36).slice(2,8);
-    const wrap = document.createElement('div'); wrap.className='tile';
-    const v = document.createElement('video'); v.autoplay=true; v.playsInline=true; v.srcObject = e.streams[0];
-    const meta = document.createElement('div'); meta.className='meta'; meta.textContent = id;
-
-    const emojiDiv = document.createElement('div'); emojiDiv.className='emoji-reactions';
-    ['👍','😂','🎉','❤️'].forEach(em=>{ const span=document.createElement('span'); span.className='emoji'; span.textContent=em; span.onclick=()=>{ alert(`Reacted with ${em}`) }; emojiDiv.appendChild(span) });
-
-    wrap.appendChild(v); wrap.appendChild(meta); wrap.appendChild(emojiDiv);
-    grid.appendChild(wrap);
-    peers[id] = {el:wrap, video:v};
+  localStream.getTracks().forEach(t=>_pc.addTrack(t,localStream));
+  
+  _pc.ontrack = e=>{
+    if(remoteVideoEl) return; // only 1 remote
+    remoteVideoEl = document.createElement('video');
+    remoteVideoEl.autoplay=true; remoteVideoEl.playsInline=true; remoteVideoEl.srcObject=e.streams[0];
+    const tile=document.createElement('div'); tile.className='tile'; tile.appendChild(remoteVideoEl);
+    const meta=document.createElement('div'); meta.className='meta'; meta.textContent='Peer';
+    tile.appendChild(meta); grid.appendChild(tile);
   };
-
-  _pc.oniceconnectionstatechange = ()=>{ logStatus('ICE: '+_pc.iceConnectionState) };
-
+  
+  _pc.oniceconnectionstatechange = ()=>{ logStatus('ICE: '+_pc.iceConnectionState); };
   return _pc;
 }
 
-createOfferBtn.onclick = async ()=>{
-  if(!localStream){ alert('Local media not ready'); return; }
-  isOfferer = true;
-  pc = makePC();
-  dc = pc.createDataChannel('chat'); setupDataChannel(dc);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  logStatus('Gathering ICE candidates...');
-  await waitForIceGatheringComplete(pc);
-  const blob = { type:'offer', sdp: pc.localDescription }; remoteBlobTa.value = btoa(JSON.stringify(blob));
-  logStatus('Offer created — copy the blob and send to remote');
+function setupDataChannel(channel){
+  dc = channel;
+  dc.onopen=()=>addChat('**connected**','system');
+  dc.onmessage=ev=>addChat(ev.data,'peer');
+  dc.onclose=()=>logStatus('DataChannel closed');
 }
 
-function waitForIceGatheringComplete(pcInner){ return new Promise(resolve=>{
-  if(pcInner.iceGatheringState==='complete') return resolve();
-  function check(){ if(pcInner.iceGatheringState==='complete'){ pcInner.removeEventListener('icegatheringstatechange',check); resolve(); } }
-  pcInner.addEventListener('icegatheringstatechange',check);
-  setTimeout(()=>{ try{ pcInner.removeEventListener('icegatheringstatechange',check) }catch{}; resolve(); },6000);
-});}
+sendChatBtn.onclick=()=>{ const msg=chatInput.value.trim(); if(!msg)return; if(dc&&dc.readyState==='open'){ dc.send(msg); addChat(msg,'me'); chatInput.value=''; } };
 
-acceptRemoteBtn.onclick = async ()=>{
-  const txt = remoteBlobTa.value.trim(); if(!txt) return alert('Paste a blob first');
-  let pkt = null; try{ pkt=JSON.parse(atob(txt)); }catch(e){ return alert('Invalid blob') }
-  if(pkt.type==='offer'){
-    pc = makePC(); pc.ondatachannel=(ev)=>{ dc=ev.channel; setupDataChannel(dc); };
-    await pc.setRemoteDescription(new RTCSessionDescription(pkt.sdp));
-    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-    logStatus('Gathering ICE candidates for answer...');
-    await waitForIceGatheringComplete(pc);
-    remoteBlobTa.value = btoa(JSON.stringify({type:'answer', sdp:pc.localDescription}));
-    logStatus('Answer created — copy this blob back to the offerer');
-  } else if(pkt.type==='answer'){
-    if(!isOfferer || !pc) return alert('You must create offer first');
-    await pc.setRemoteDescription(new RTCSessionDescription(pkt.sdp));
-    logStatus('Remote answer set — connection should establish shortly');
-  } else alert('Unknown blob type');
-}
-
-function setupDataChannel(ch){
-  ch.onopen=()=>{ logStatus('DataChannel open — chat available'); addChat('**connected**','system'); }
-  ch.onmessage=(ev)=>{ addChat(ev.data,'peer'); }
-  ch.onclose=()=>{ logStatus('DataChannel closed'); }
-}
-sendChatBtn.onclick=()=>{
-  const msg=chatInput.value.trim(); if(!msg) return; if(dc && dc.readyState==='open'){ dc.send(msg); addChat(msg,'me'); chatInput.value=''; }else alert('Data channel not open yet');
-}
-remoteBlobTa.addEventListener('dblclick',()=>{ remoteBlobTa.select(); document.execCommand('copy'); alert('copied') });
-joinBtn.onclick=()=>{ joinBtn.style.display='none'; leaveBtn.style.display='inline-block'; logStatus('Manual mode: use Create Offer or paste remote blob'); }
-leaveBtn.onclick=()=>{ leaveBtn.style.display='none'; joinBtn.style.display='inline-block'; logStatus('Idle'); try{ if(pc) pc.close(); }catch{} }
-
-// ---------------------- Auto-join using URL ----------------------
-const urlParams = new URLSearchParams(window.location.search);
-const roomName = urlParams.get('room') || 'room-1';
-const roomInput = document.getElementById('room');
-
-roomInput.value = roomName;
-
-joinBtn.onclick = async ()=>{
+joinBtn.onclick=async()=>{
   joinBtn.style.display='none'; leaveBtn.style.display='inline-block';
+  const roomName = roomInput.value.trim();
   logStatus('Joining room: '+roomName);
   pc = makePC();
 
-  const { data: existing } = await supabase.from('rooms').select('*').eq('room',roomName).single();
-  if(!existing){
-    isOfferer=true;
-    dc = pc.createDataChannel('chat'); setupDataChannel(dc);
-    const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-    await supabase.from('rooms').upsert({room:roomName,sdp:JSON.stringify(pc.localDescription)});
-    logStatus('Created offer, waiting for answer...');
-    supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', payload => {
-      console.log('Room update!', payload)
-      if (!isOfferer) {
-          const ans = JSON.parse(payload.new.sdp);
-          pc.setRemoteDescription(ans);
-          logStatus('Answer received — connected!');
-      }
-  })
-  .subscribe();
+  const { data } = await supabase.from('rooms').select('*').eq('room',roomName).single();
 
+  if(!data){
+    // we are offerer
+    isOfferer=true;
+    const channel = pc.createDataChannel('chat');
+    setupDataChannel(channel);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await supabase.from('rooms').insert([{room:roomName,sdp:JSON.stringify(pc.localDescription)}]);
+    logStatus('Offer created, waiting for answer...');
+
+    const sub = supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', async payload=>{
+      if(!isOfferer) return;
+      const ans = JSON.parse(payload.new.sdp);
+      await pc.setRemoteDescription(ans);
+      logStatus('Answer received — connected!');
+    }).subscribe();
   } else {
-    await pc.setRemoteDescription(JSON.parse(existing.sdp));
-    pc.ondatachannel=ev=>{ dc=ev.channel; setupDataChannel(dc); };
-    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-    await supabase.from('rooms').upsert({room:roomName,sdp:JSON.stringify(pc.localDescription)});
+    // we are answerer
+    await pc.setRemoteDescription(JSON.parse(data.sdp));
+    pc.ondatachannel = ev=>setupDataChannel(ev.channel);
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    await supabase.from('rooms').update({sdp:JSON.stringify(pc.localDescription)}).eq('room',roomName);
     logStatus('Answered offer — connected!');
   }
 };
 
-async function init() {
-  await startLocal();
-  if(roomName) joinBtn.click();
-}
-init();
+leaveBtn.onclick=()=>{
+  try{ pc?.close(); pc=null; remoteVideoEl=null; dc=null; }catch{}
+  joinBtn.style.display='inline-block'; leaveBtn.style.display='none';
+  logStatus('Left room');
+};
 
-
+(async()=>{ await startLocal(); })();
 </script>
 </body>
 </html>
