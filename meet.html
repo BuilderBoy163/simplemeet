@@ -49,6 +49,48 @@ button.small{padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.
   .chat-input{flex-direction:column}
   input[type=text]{width:100%}
 }
+main {
+  display: flex;
+  gap: 16px;
+  overflow-y: auto;       /* allows scrolling only in main content */
+  max-height: calc(100vh - 60px); /* leave room for header */
+}
+
+.side {
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 60px; /* height of header */
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;       /* side panel scrollable independently */
+}
+
+@media (max-width: 800px) {
+  .side {
+    position: fixed;      /* stay on top */
+    top: 50px;            /* under header */
+    right: 0;
+    background: var(--bg2);
+    z-index: 999;
+    height: calc(100vh - 50px);
+    box-shadow: -2px 0 8px rgba(0,0,0,0.5);
+    transition: transform 0.25s ease-in-out;
+    transform: translateX(100%); /* hidden by default */
+  }
+  .side.show {
+    transform: translateX(0);
+  }
+  main {
+    flex-direction: column;
+    padding: 0 8px;
+  }
+  #toggleSide {
+    display: inline-block;
+  }
+}
+
 </style>
 
 </head>
@@ -239,18 +281,13 @@ function checkMobile() {
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(260px,1fr))';
   }
 }
+  
 window.addEventListener('resize', checkMobile);
 checkMobile();
-
 toggleBtn.onclick = () => {
-  if(sidePanel.style.display === 'none'){
-    sidePanel.style.display = 'flex';
-    toggleBtn.textContent = 'Hide Panel';
-  } else {
-    sidePanel.style.display = 'none';
-    toggleBtn.textContent = 'Show Panel';
-  }
+  sidePanel.classList.toggle('show');
 };
+
 
 </script>
   
