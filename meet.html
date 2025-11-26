@@ -238,12 +238,14 @@ remoteBlobTa.addEventListener('dblclick', ()=>{
   alert('Copied to clipboard');
 });
 
-// --- MOBILE TOGGLE ---
+const toggleBtn = document.getElementById('toggleSide');
+const sidePanel = document.querySelector('.side');
+
 function updateLayout() {
   if(window.innerWidth <= 800){
     toggleBtn.style.display = 'inline-block';
+    sidePanel.style.display = 'block';        // always block so JS can toggle
     if(!sidePanel.classList.contains('show')){
-      sidePanel.style.display = 'block';
       sidePanel.style.transform = 'translateX(100%)';
     }
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(140px,1fr))';
@@ -255,9 +257,13 @@ function updateLayout() {
   }
 }
 
+toggleBtn.addEventListener('click', ()=>{
+  sidePanel.classList.toggle('show');
+});
+
+// Update layout on load and on resize
 updateLayout();
 window.addEventListener('resize', updateLayout);
-toggleBtn.onclick = ()=> sidePanel.classList.toggle('show');
 
 </script>
 </body>
