@@ -78,7 +78,7 @@
     </main>
   </div>
 
-<script>
+<script type="module">
 const stunServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -192,6 +192,8 @@ leaveBtn.onclick=()=>{ leaveBtn.style.display='none'; joinBtn.style.display='inl
 // ---------------------- Auto-join using URL ----------------------
 const urlParams = new URLSearchParams(window.location.search);
 const roomName = urlParams.get('room') || 'room-1';
+const roomInput = document.getElementById('room');
+
 roomInput.value = roomName;
 
 joinBtn.onclick = async ()=>{
@@ -221,7 +223,12 @@ joinBtn.onclick = async ()=>{
   }
 };
 
-if(roomName) joinBtn.click();
+async function init() {
+  await startLocal();
+  if(roomName) joinBtn.click();
+}
+init();
+
 
 </script>
 </body>
