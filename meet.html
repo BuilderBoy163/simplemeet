@@ -64,6 +64,7 @@ button.small{padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.
         <button id="joinBtn" class="btn btn-main">Join</button>
         <button id="leaveBtn" class="btn btn-ghost" style="display:none">Leave</button>
       </div>
+      <button id="toggleSide" class="btn btn-ghost" style="display:none">Toggle Panel</button>
     </header>
 
     <main>
@@ -222,7 +223,37 @@ remoteBlobTa.addEventListener('dblclick', ()=>{
   document.execCommand('copy');
   alert('Copied to clipboard');
 });
+
+  const sidePanel = document.querySelector('.side');
+const toggleBtn = document.getElementById('toggleSide');
+
+// Show toggle button only on mobile
+function checkMobile() {
+  if(window.innerWidth <= 800){
+    toggleBtn.style.display = 'inline-block';
+    sidePanel.style.display = 'none';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(200px,1fr))';
+  } else {
+    toggleBtn.style.display = 'none';
+    sidePanel.style.display = 'flex';
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(260px,1fr))';
+  }
+}
+window.addEventListener('resize', checkMobile);
+checkMobile();
+
+toggleBtn.onclick = () => {
+  if(sidePanel.style.display === 'none'){
+    sidePanel.style.display = 'flex';
+    toggleBtn.textContent = 'Hide Panel';
+  } else {
+    sidePanel.style.display = 'none';
+    toggleBtn.textContent = 'Show Panel';
+  }
+};
+
 </script>
+  
 
 </body>
 </html>
