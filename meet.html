@@ -85,7 +85,6 @@ const SUPABASE_URL = 'https://wzaimsgnwsxgndlpyeiw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YWltc2dud3N4Z25kbHB5ZWl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxMDQwODMsImV4cCI6MjA3OTY4MDA4M30.FNIBYc0GikZTJnKHW5FiqBfs7MwSB5nlnoMIlEFl8v0';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ✅ STUN servers (only once)
 const stunServers = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -106,12 +105,11 @@ const roomInput = document.getElementById('room');
 let pc = null;
 let dc = null;
 let localStream = null;
-let remoteVideoEl = null;
 let isOfferer = false;
 let roomName = null;
 let supabaseSub = null;
 
-// ----- UTILS -----
+// UTILS
 function logStatus(msg){ statusEl.textContent = msg; }
 function addChat(msg, from='me'){ 
   const d = document.createElement('div'); 
@@ -120,7 +118,7 @@ function addChat(msg, from='me'){
   chatArea.scrollTop = chatArea.scrollHeight; 
 }
 
-// ----- LOCAL STREAM -----
+// LOCAL STREAM
 async function startLocal(){
   try {
     localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
@@ -131,24 +129,23 @@ async function startLocal(){
   }
 }
 
-// ----- PEER CONNECTION -----
-function makePC(){
+// PEER CONNECTION
+function makePC(peerId){
   const _pc = new RTCPeerConnection({iceServers: stunServers});
   localStream.getTracks().forEach(t => _pc.addTrack(t, localStream));
 
   _pc.ontrack = e => {
-    if(remoteVideoEl) return; // bandwidth™️ only 1 remote
-    remoteVideoEl = document.createElement('video');
-    remoteVideoEl.autoplay = true;
-    remoteVideoEl.playsInline = true;
-    remoteVideoEl.srcObject = e.streams[0];
+    const remoteVideo = document.createElement('video');
+    remoteVideo.autoplay = true;
+    remoteVideo.playsInline = true;
+    remoteVideo.srcObject = e.streams[0];
 
     const tile = document.createElement('div');
     tile.className = 'tile';
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = 'Peer';
-    tile.appendChild(remoteVideoEl);
+    meta.textContent = peerId || 'Peer';
+    tile.appendChild(remoteVideo);
     tile.appendChild(meta);
     grid.appendChild(tile);
   };
@@ -157,7 +154,7 @@ function makePC(){
   return _pc;
 }
 
-// ----- DATA CHANNEL -----
+// DATA CHANNEL
 function setupDataChannel(channel){
   dc = channel;
   dc.onopen = ()=>addChat('**connected**','system');
@@ -165,7 +162,7 @@ function setupDataChannel(channel){
   dc.onclose = ()=>logStatus('DataChannel closed');
 }
 
-// ----- CHAT SEND -----
+// CHAT
 sendChatBtn.onclick = () => {
   const msg = chatInput.value.trim(); 
   if(!msg) return; 
@@ -176,7 +173,7 @@ sendChatBtn.onclick = () => {
   } else alert('Data channel not open yet');
 };
 
-// ----- JOIN ROOM -----
+// JOIN ROOM
 async function joinRoom(){
   joinBtn.style.display='none';
   leaveBtn.style.display='inline-block';
@@ -185,46 +182,27 @@ async function joinRoom(){
   if(!roomName) return alert('Enter a room name');
   logStatus('Joining room: '+roomName);
 
-  pc = makePC();
-
-  // Subscribe first, catch updates/answers
+  // subscribe first
   if(supabaseSub) supabase.removeSubscription(supabaseSub);
-  supabaseSub = supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', async payload => {
-    if(isOfferer && payload.new?.sdp){
-      const ans = JSON.parse(payload.new.sdp);
-      await pc.setRemoteDescription(ans);
-      logStatus('Answer received — connected!');
+  supabaseSub = supabase.from(`rooms:room=eq.${roomName}`).on('INSERT', async payload => {
+    if(payload.new?.sdp){
+      if(!pc) pc = makePC(payload.new.id);
+      await pc.setRemoteDescription(JSON.parse(payload.new.sdp));
+      logStatus('New peer joined & connected!');
     }
   }).subscribe();
 
-  // Check if room exists
-  const { data } = await supabase.from('rooms').select('*').eq('room', roomName).single();
-
-  if(!data){
-    // First person -> offerer
-    isOfferer = true;
-    const channel = pc.createDataChannel('chat');
-    setupDataChannel(channel);
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await supabase.from('rooms').insert([{room: roomName, sdp: JSON.stringify(pc.localDescription)}]);
-    logStatus('Offer created, waiting for answer...');
-  } else {
-    // Second+ person -> answerer
-    isOfferer = false;
-    await pc.setRemoteDescription(JSON.parse(data.sdp));
-    pc.ondatachannel = ev => setupDataChannel(ev.channel);
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    await supabase.from('rooms').update({sdp: JSON.stringify(pc.localDescription)}).eq('room', roomName);
-    logStatus('Answered offer — connected!');
-  }
+  // Insert our SDP
+  pc = makePC('You');
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await supabase.from('rooms').insert([{room: roomName, sdp: JSON.stringify(pc.localDescription)}]);
+  logStatus('Offer created & broadcasted');
 }
 
-// ----- LEAVE ROOM -----
+// LEAVE ROOM
 function leaveRoom(){
-  try{ pc?.close(); pc=null; remoteVideoEl=null; dc=null; }catch{}
+  try{ pc?.close(); pc=null; dc=null; }catch{}
   joinBtn.style.display='inline-block';
   leaveBtn.style.display='none';
   logStatus('Left room');
@@ -235,17 +213,18 @@ function leaveRoom(){
   }
 }
 
-// ----- BUTTONS -----
+// BUTTONS
 joinBtn.onclick = joinRoom;
 leaveBtn.onclick = leaveRoom;
 
-// ----- URL PARAM AUTO-ROOM -----
+// URL PARAM AUTO-ROOM
 const urlParams = new URLSearchParams(window.location.search);
 const urlRoom = urlParams.get('room');
 if(urlRoom) roomInput.value = urlRoom;
 
-// ----- START -----
+// START
 (async()=>{ await startLocal(); })();
 </script>
+
 </body>
 </html>
