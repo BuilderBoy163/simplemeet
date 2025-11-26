@@ -1,89 +1,76 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SimpleMeet++ — Serverless Signaling (Glassmorphism)</title>
-  <style>
-    :root{--bg1:#071023;--bg2:#0b1a2b;--accent1:#7dd3fc;--accent2:#a78bfa;--muted:#98a8bf;--glass:rgba(255,255,255,0.06);--highlight:#7dd3fc}
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto;color:#eaf2ff;background:linear-gradient(180deg,var(--bg1),var(--bg2));-webkit-font-smoothing:antialiased}
-    .app{max-width:1200px;margin:20px auto;padding:18px;display:flex;flex-direction:column;gap:16px}
-    header{display:flex;align-items:center;gap:14px}
-    .brand{font-weight:800;font-size:20px;background:linear-gradient(90deg,var(--accent1),var(--accent2))text;color:transparent}
-    .glass{background:var(--glass);border:1px solid rgba(255,255,255,0.06);backdrop-filter: blur(8px);padding:10px;border-radius:12px;color:var(--muted)}
-    .btn{padding:10px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
-    .btn-main{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#042135}
-    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
-    main{display:flex;gap:16px}
-    .grid{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:10px}
-    .tile{position:relative;border-radius:14px;overflow:hidden;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.2));border:1px solid rgba(255,255,255,0.04);box-shadow:0 8px 30px rgba(2,6,23,0.6);transition:all 0.3s ease;aspect-ratio:16/9}
-    .tile.speaking{border:3px solid var(--highlight);box-shadow:0 0 20px var(--highlight)}
-    .tile video{width:100%;height:100%;object-fit:cover;display:block}
-    .meta{position:absolute;left:10px;bottom:10px;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(0,0,0,0.25));font-weight:700;font-size:13px;display:flex;align-items:center;gap:4px}
-    .emoji-reactions{position:absolute;top:10px;right:10px;display:flex;gap:4px}
-    .emoji{cursor:pointer;font-size:20px;}
-    .side{width:360px;display:flex;flex-direction:column;gap:12px}
-    .panel{padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.24));border:1px solid rgba(255,255,255,0.04);backdrop-filter:blur(10px)}
-    textarea{width:100%;height:92px;background:transparent;border:1px dashed rgba(255,255,255,0.04);color:inherit;padding:8px;border-radius:8px}
-    .chat-area{height:200px;overflow:auto;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
-    .chat-input{display:flex;gap:8px;margin-top:8px}
-    input[type=text]{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
-    button.small{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.02)}
-    .status{font-size:13px;color:var(--muted)}
-    @media (max-width:980px){.side{display:none}.grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SimpleMeet++ — Multi-Peer</title>
+<style>
+:root{--bg1:#071023;--bg2:#0b1a2b;--accent1:#7dd3fc;--accent2:#a78bfa;--muted:#98a8bf;--glass:rgba(255,255,255,0.06);--highlight:#7dd3fc}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto;color:#eaf2ff;background:linear-gradient(180deg,var(--bg1),var(--bg2));-webkit-font-smoothing:antialiased}
+.app{max-width:1200px;margin:20px auto;padding:18px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:center;gap:14px}
+.brand{font-weight:800;font-size:20px;background:linear-gradient(90deg,var(--accent1),var(--accent2))text;color:transparent}
+.glass{background:var(--glass);border:1px solid rgba(255,255,255,0.06);backdrop-filter: blur(8px);padding:10px;border-radius:12px;color:var(--muted)}
+.btn{padding:10px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+.btn-main{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#042135}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+main{display:flex;gap:16px}
+.grid{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:10px}
+.tile{position:relative;border-radius:14px;overflow:hidden;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.2));border:1px solid rgba(255,255,255,0.04);box-shadow:0 8px 30px rgba(2,6,23,0.6);transition:all 0.3s ease;aspect-ratio:16/9}
+.tile video{width:100%;height:100%;object-fit:cover;display:block}
+.meta{position:absolute;left:10px;bottom:10px;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg, rgba(0,0,0,0.5), rgba(0,0,0,0.25));font-weight:700;font-size:13px;display:flex;align-items:center;gap:4px}
+.side{width:360px;display:flex;flex-direction:column;gap:12px}
+.panel{padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.24));border:1px solid rgba(255,255,255,0.04);backdrop-filter:blur(10px)}
+textarea{width:100%;height:92px;background:transparent;border:1px dashed rgba(255,255,255,0.04);color:inherit;padding:8px;border-radius:8px}
+.chat-area{height:200px;overflow:auto;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
+.chat-input{display:flex;gap:8px;margin-top:8px}
+input[type=text]{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+button.small{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.02)}
+.status{font-size:13px;color:var(--muted)}
+@media (max-width:980px){.side{display:none}.grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}}
+</style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="brand">SimpleMeet++</div>
-      <div class="glass">
-        <label style="font-size:12px;color:var(--muted)">Room (optional)</label>
-        <input id="room" placeholder="room-1" value="room-1" />
-      </div>
-      <div style="margin-left:auto;display:flex;gap:8px">
-        <button id="joinBtn" class="btn btn-main">Join</button>
-        <button id="leaveBtn" class="btn btn-ghost" style="display:none">Leave</button>
-      </div>
-    </header>
-
-    <main>
-      <div class="grid" id="grid"></div>
-
-      <aside class="side">
-        <div class="panel">
-          <h4 style="margin:0 0 8px 0">Preview</h4>
-          <div class="tile" style="min-height:120px"><video id="local" autoplay muted playsinline></video><div class="meta">You</div></div>
-        </div>
-
-        <div class="panel">
-          <h4 style="margin:0 0 8px 0">Serverless Signaling</h4>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:8px">No central server — exchange the generated blobs using any chat app (Discord, SMS, DM). Works across networks with public STUN servers.</div>
-          <button id="createOffer" class="small">Create Offer (copy & send)</button>
-          <div style="margin-top:8px;"><label style="font-size:12px;color:var(--muted)">Paste remote blob here</label><textarea id="remoteBlob" placeholder="Paste remote offer/answer blob"></textarea><button id="acceptRemote" class="small">Accept Remote</button></div>
-        </div>
-
-        <div class="panel">
-          <h4 style="margin:0 0 8px 0">Chat (peer-to-peer)</h4>
-          <div class="chat-area" id="chatArea"></div>
-          <div class="chat-input"><input id="chatInput" type="text" placeholder="Say something..." /><button id="sendChat" class="small">Send</button></div>
-        </div>
-
-        <div class="panel">
-          <h4 style="margin:0 0 8px 0">Status</h4>
-          <div id="status" class="status">Idle — serverless mode</div>
-        </div>
-      </aside>
-    </main>
+<div class="app">
+<header>
+  <div class="brand">SimpleMeet++</div>
+  <div class="glass">
+    <label style="font-size:12px;color:var(--muted)">Room</label>
+    <input id="room" placeholder="room-1" value="room-1" />
   </div>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button id="joinBtn" class="btn btn-main">Join</button>
+    <button id="leaveBtn" class="btn btn-ghost" style="display:none">Leave</button>
+  </div>
+</header>
+
+<main>
+  <div class="grid" id="grid"></div>
+  <aside class="side">
+    <div class="panel">
+      <h4>Preview</h4>
+      <div class="tile" style="min-height:120px"><video id="local" autoplay muted playsinline></video><div class="meta">You</div></div>
+    </div>
+    <div class="panel">
+      <h4>Chat</h4>
+      <div class="chat-area" id="chatArea"></div>
+      <div class="chat-input"><input id="chatInput" placeholder="Say something..."/><button id="sendChat" class="small">Send</button></div>
+    </div>
+    <div class="panel">
+      <h4>Status</h4>
+      <div id="status" class="status">Idle</div>
+    </div>
+  </aside>
+</main>
+</div>
 
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 const SUPABASE_URL = 'https://wzaimsgnwsxgndlpyeiw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YWltc2dud3N4Z25kbHB5ZWl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxMDQwODMsImV4cCI6MjA3OTY4MDA4M30.FNIBYc0GikZTJnKHW5FiqBfs7MwSB5nlnoMIlEFl8v0';
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_KEY = 'YOUR_KEY_HERE';
+const supabase = createClient(SUPABASE_URL,SUPABASE_KEY);
 
 const stunServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -91,7 +78,6 @@ const stunServers = [
   { urls: 'stun:stun2.l.google.com:19302' }
 ];
 
-// HTML elements
 const localV = document.getElementById('local');
 const grid = document.getElementById('grid');
 const statusEl = document.getElementById('status');
@@ -102,129 +88,107 @@ const joinBtn = document.getElementById('joinBtn');
 const leaveBtn = document.getElementById('leaveBtn');
 const roomInput = document.getElementById('room');
 
-let pc = null;
-let dc = null;
 let localStream = null;
-let isOfferer = false;
-let roomName = null;
-let supabaseSub = null;
+let pcs = {};   // peer connections keyed by peer id
+let dcs = {};   // data channels keyed by peer id
+let myId = 'peer-'+Math.random().toString(36).substr(2,6);
+let roomName = '';
 
-// UTILS
 function logStatus(msg){ statusEl.textContent = msg; }
-function addChat(msg, from='me'){ 
-  const d = document.createElement('div'); 
-  d.textContent = (from ? from + ': ' : '') + msg; 
-  chatArea.appendChild(d); 
-  chatArea.scrollTop = chatArea.scrollHeight; 
-}
+function addChat(msg, from='me'){ const d=document.createElement('div'); d.textContent=(from?from+': ':'')+msg; chatArea.appendChild(d); chatArea.scrollTop=chatArea.scrollHeight; }
 
-// LOCAL STREAM
 async function startLocal(){
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-    localV.srcObject = localStream;
-    logStatus('Camera & mic ready');
-  } catch(e){
-    alert('Cannot access camera/mic: '+e.message);
-  }
+  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+  localV.srcObject = localStream;
+  logStatus('Camera & mic ready');
 }
 
-// PEER CONNECTION
 function makePC(peerId){
-  const _pc = new RTCPeerConnection({iceServers: stunServers});
-  localStream.getTracks().forEach(t => _pc.addTrack(t, localStream));
+  const _pc = new RTCPeerConnection({iceServers:stunServers});
+  localStream.getTracks().forEach(track=>_pc.addTrack(track,localStream));
 
   _pc.ontrack = e => {
-    const remoteVideo = document.createElement('video');
-    remoteVideo.autoplay = true;
-    remoteVideo.playsInline = true;
-    remoteVideo.srcObject = e.streams[0];
-
-    const tile = document.createElement('div');
-    tile.className = 'tile';
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.textContent = peerId || 'Peer';
-    tile.appendChild(remoteVideo);
-    tile.appendChild(meta);
-    grid.appendChild(tile);
+    if(document.getElementById('vid-'+peerId)) return;
+    const vid = document.createElement('video');
+    vid.autoplay=true; vid.playsInline=true; vid.srcObject=e.streams[0]; vid.id='vid-'+peerId;
+    const tile = document.createElement('div'); tile.className='tile'; tile.appendChild(vid);
+    const meta = document.createElement('div'); meta.className='meta'; meta.textContent=peerId;
+    tile.appendChild(meta); grid.appendChild(tile);
   };
 
-  _pc.oniceconnectionstatechange = () => logStatus('ICE: '+_pc.iceConnectionState);
+  _pc.onicecandidate = async e => {
+    if(e.candidate) return; // ignore local candidates, rely on full SDP
+  };
+
   return _pc;
 }
 
-// DATA CHANNEL
-function setupDataChannel(channel){
-  dc = channel;
-  dc.onopen = ()=>addChat('**connected**','system');
-  dc.onmessage = ev => addChat(ev.data,'peer');
-  dc.onclose = ()=>logStatus('DataChannel closed');
+function setupDataChannel(peerId, channel){
+  dcs[peerId] = channel;
+  channel.onopen = ()=>{ if(peerId==='first') addChat('**connected to first peer**','system'); }
+  channel.onmessage = ev => addChat(ev.data,peerId);
+  channel.onclose = ()=>logStatus('DataChannel closed for '+peerId);
 }
 
-// CHAT
-sendChatBtn.onclick = () => {
-  const msg = chatInput.value.trim(); 
-  if(!msg) return; 
-  if(dc && dc.readyState==='open'){ 
-    dc.send(msg); 
-    addChat(msg,'me'); 
-    chatInput.value=''; 
-  } else alert('Data channel not open yet');
+async function joinRoom(){
+  joinBtn.style.display='none'; leaveBtn.style.display='inline-block';
+  roomName = roomInput.value.trim();
+  if(!roomName) return alert('Enter room name');
+  logStatus('Joining room '+roomName);
+
+  const { data: existing } = await supabase.from('rooms').select('*').eq('room',roomName);
+  const peersInRoom = existing || [];
+
+  for(let peer of peersInRoom){
+    if(peer.id === myId) continue;
+    const pc = makePC(peer.id);
+    pcs[peer.id] = pc;
+    pc.ondatachannel = ev => setupDataChannel(peer.id, ev.channel);
+    await pc.setRemoteDescription(JSON.parse(peer.sdp));
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    await supabase.from('rooms').update({sdp: JSON.stringify(pc.localDescription)}).eq('id',peer.id);
+  }
+
+  // insert self
+  const pcSelf = makePC(myId);
+  pcs[myId] = pcSelf;
+  const dc = pcSelf.createDataChannel('chat');
+  setupDataChannel('first', dc);
+  const offer = await pcSelf.createOffer();
+  await pcSelf.setLocalDescription(offer);
+  await supabase.from('rooms').insert([{id: myId, room: roomName, sdp: JSON.stringify(pcSelf.localDescription)}]);
+
+  // subscribe to changes in the room
+  supabase.from(`rooms:room=eq.${roomName}`).on('INSERT', payload => {
+    const peer = payload.new;
+    if(peer.id === myId) return;
+    if(pcs[peer.id]) return;
+    (async ()=>{
+      const pcNew = makePC(peer.id);
+      pcs[peer.id] = pcNew;
+      const offer = JSON.parse(peer.sdp);
+      await pcNew.setRemoteDescription(offer);
+      const ans = await pcNew.createAnswer();
+      await pcNew.setLocalDescription(ans);
+      await supabase.from('rooms').update({sdp: JSON.stringify(pcNew.localDescription)}).eq('id', peer.id);
+    })();
+  }).subscribe();
+}
+
+joinBtn.onclick = joinRoom;
+leaveBtn.onclick = ()=>{
+  for(let id in pcs){ pcs[id]?.close(); }
+  pcs={}; dcs={}; joinBtn.style.display='inline-block'; leaveBtn.style.display='none'; logStatus('Left room'); 
 };
 
-// JOIN ROOM
-async function joinRoom(){
-  joinBtn.style.display='none';
-  leaveBtn.style.display='inline-block';
+sendChatBtn.onclick = ()=>{
+  const msg = chatInput.value.trim(); if(!msg) return;
+  for(let id in dcs) if(dcs[id]?.readyState==='open') dcs[id].send(msg);
+  addChat(msg,'me'); chatInput.value='';
+};
 
-  roomName = roomInput.value.trim();
-  if(!roomName) return alert('Enter a room name');
-  logStatus('Joining room: '+roomName);
-
-  // subscribe first
-  if(supabaseSub) supabase.removeSubscription(supabaseSub);
-  supabaseSub = supabase.from(`rooms:room=eq.${roomName}`).on('INSERT', async payload => {
-    if(payload.new?.sdp){
-      if(!pc) pc = makePC(payload.new.id);
-      await pc.setRemoteDescription(JSON.parse(payload.new.sdp));
-      logStatus('New peer joined & connected!');
-    }
-  }).subscribe();
-
-  // Insert our SDP
-  pc = makePC('You');
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await supabase.from('rooms').insert([{room: roomName, sdp: JSON.stringify(pc.localDescription)}]);
-  logStatus('Offer created & broadcasted');
-}
-
-// LEAVE ROOM
-function leaveRoom(){
-  try{ pc?.close(); pc=null; dc=null; }catch{}
-  joinBtn.style.display='inline-block';
-  leaveBtn.style.display='none';
-  logStatus('Left room');
-
-  if(supabaseSub){
-    supabase.removeSubscription(supabaseSub);
-    supabaseSub = null;
-  }
-}
-
-// BUTTONS
-joinBtn.onclick = joinRoom;
-leaveBtn.onclick = leaveRoom;
-
-// URL PARAM AUTO-ROOM
-const urlParams = new URLSearchParams(window.location.search);
-const urlRoom = urlParams.get('room');
-if(urlRoom) roomInput.value = urlRoom;
-
-// START
 (async()=>{ await startLocal(); })();
 </script>
-
 </body>
 </html>
