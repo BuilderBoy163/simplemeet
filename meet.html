@@ -79,19 +79,17 @@
   </div>
 
 <script type="module">
-const stunServers = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' }
-];
-
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 const SUPABASE_URL = 'https://wzaimsgnwsxgndlpyeiw.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YWltc2dud3N4Z25kbHB5ZWl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxMDQwODMsImV4cCI6MjA3OTY4MDA4M30.FNIBYc0GikZTJnKHW5FiqBfs7MwSB5nlnoMIlEFl8v0';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const stunServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+const stunServers = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' }
+];
 
 const localV = document.getElementById('local');
 const grid = document.getElementById('grid');
@@ -105,83 +103,112 @@ const roomInput = document.getElementById('room');
 
 let pc = null;
 let dc = null;
-let isOfferer = false;
 let localStream = null;
 let remoteVideoEl = null;
+let isOfferer = false;
 
 function logStatus(msg){ statusEl.textContent = msg; }
-function addChat(msg, from='me'){ const d=document.createElement('div'); d.textContent=(from?from+': ':'')+msg; chatArea.appendChild(d); chatArea.scrollTop=chatArea.scrollHeight; }
+function addChat(msg, from='me'){ 
+  const d = document.createElement('div'); 
+  d.textContent = (from ? from + ': ' : '') + msg; 
+  chatArea.appendChild(d); 
+  chatArea.scrollTop = chatArea.scrollHeight; 
+}
 
 async function startLocal(){
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
     localV.srcObject = localStream;
     logStatus('Camera & mic ready');
-  } catch(e){ alert('Cannot access camera/mic: '+e.message); }
+  } catch(e){
+    alert('Cannot access camera/mic: '+e.message);
+  }
 }
 
 function makePC(){
-  const _pc = new RTCPeerConnection({iceServers:stunServers});
-  localStream.getTracks().forEach(t=>_pc.addTrack(t,localStream));
-  
-  _pc.ontrack = e=>{
-    if(remoteVideoEl) return; // only 1 remote
+  const _pc = new RTCPeerConnection({iceServers: stunServers});
+  localStream.getTracks().forEach(t => _pc.addTrack(t, localStream));
+
+  _pc.ontrack = e => {
+    if(remoteVideoEl) return; // only one remote for bandwidth™️
     remoteVideoEl = document.createElement('video');
-    remoteVideoEl.autoplay=true; remoteVideoEl.playsInline=true; remoteVideoEl.srcObject=e.streams[0];
-    const tile=document.createElement('div'); tile.className='tile'; tile.appendChild(remoteVideoEl);
-    const meta=document.createElement('div'); meta.className='meta'; meta.textContent='Peer';
-    tile.appendChild(meta); grid.appendChild(tile);
+    remoteVideoEl.autoplay = true;
+    remoteVideoEl.playsInline = true;
+    remoteVideoEl.srcObject = e.streams[0];
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = 'Peer';
+    tile.appendChild(remoteVideoEl);
+    tile.appendChild(meta);
+    grid.appendChild(tile);
   };
-  
-  _pc.oniceconnectionstatechange = ()=>{ logStatus('ICE: '+_pc.iceConnectionState); };
+
+  _pc.oniceconnectionstatechange = ()=>logStatus('ICE: '+_pc.iceConnectionState);
   return _pc;
 }
 
 function setupDataChannel(channel){
   dc = channel;
-  dc.onopen=()=>addChat('**connected**','system');
-  dc.onmessage=ev=>addChat(ev.data,'peer');
-  dc.onclose=()=>logStatus('DataChannel closed');
+  dc.onopen = ()=>addChat('**connected**','system');
+  dc.onmessage = ev => addChat(ev.data,'peer');
+  dc.onclose = ()=>logStatus('DataChannel closed');
 }
 
-sendChatBtn.onclick=()=>{ const msg=chatInput.value.trim(); if(!msg)return; if(dc&&dc.readyState==='open'){ dc.send(msg); addChat(msg,'me'); chatInput.value=''; } };
+sendChatBtn.onclick = ()=> {
+  const msg = chatInput.value.trim(); 
+  if(!msg) return; 
+  if(dc && dc.readyState==='open'){ 
+    dc.send(msg); 
+    addChat(msg,'me'); 
+    chatInput.value=''; 
+  } else alert('Data channel not open yet');
+};
 
-joinBtn.onclick=async()=>{
-  joinBtn.style.display='none'; leaveBtn.style.display='inline-block';
+joinBtn.onclick = async () => {
+  joinBtn.style.display='none';
+  leaveBtn.style.display='inline-block';
   const roomName = roomInput.value.trim();
+  if(!roomName) return alert('Enter a room name');
   logStatus('Joining room: '+roomName);
+
   pc = makePC();
 
-  const { data } = await supabase.from('rooms').select('*').eq('room',roomName).single();
+  const { data } = await supabase.from('rooms').select('*').eq('room', roomName).single();
 
   if(!data){
-    // we are offerer
-    isOfferer=true;
+    // We are the first person -> offerer
+    isOfferer = true;
     const channel = pc.createDataChannel('chat');
     setupDataChannel(channel);
+
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    await supabase.from('rooms').insert([{room:roomName,sdp:JSON.stringify(pc.localDescription)}]);
+    await supabase.from('rooms').insert([{room: roomName, sdp: JSON.stringify(pc.localDescription)}]);
     logStatus('Offer created, waiting for answer...');
 
-    const sub = supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', async payload=>{
+    // Listen for answer
+    const sub = supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', async payload => {
       if(!isOfferer) return;
       const ans = JSON.parse(payload.new.sdp);
       await pc.setRemoteDescription(ans);
       logStatus('Answer received — connected!');
     }).subscribe();
+
   } else {
-    // we are answerer
+    // Second person -> answerer
+    isOfferer = false;
     await pc.setRemoteDescription(JSON.parse(data.sdp));
-    pc.ondatachannel = ev=>setupDataChannel(ev.channel);
+    pc.ondatachannel = ev => setupDataChannel(ev.channel);
     const ans = await pc.createAnswer();
     await pc.setLocalDescription(ans);
-    await supabase.from('rooms').update({sdp:JSON.stringify(pc.localDescription)}).eq('room',roomName);
+    await supabase.from('rooms').update({sdp: JSON.stringify(pc.localDescription)}).eq('room', roomName);
     logStatus('Answered offer — connected!');
   }
 };
 
-leaveBtn.onclick=()=>{
+leaveBtn.onclick = ()=>{
   try{ pc?.close(); pc=null; remoteVideoEl=null; dc=null; }catch{}
   joinBtn.style.display='inline-block'; leaveBtn.style.display='none';
   logStatus('Left room');
@@ -189,5 +216,6 @@ leaveBtn.onclick=()=>{
 
 (async()=>{ await startLocal(); })();
 </script>
+
 </body>
 </html>
