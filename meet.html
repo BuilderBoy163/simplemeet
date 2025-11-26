@@ -69,8 +69,8 @@ button.small{padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 const SUPABASE_URL = 'https://wzaimsgnwsxgndlpyeiw.supabase.co';
-const SUPABASE_KEY = 'YOUR_KEY_HERE';
-const supabase = createClient(SUPABASE_URL,SUPABASE_KEY);
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6YWltc2dud3N4Z25kbHB5ZWl3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxMDQwODMsImV4cCI6MjA3OTY4MDA4M30.FNIBYc0GikZTJnKHW5FiqBfs7MwSB5nlnoMIlEFl8v0';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const stunServers = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -89,106 +89,132 @@ const leaveBtn = document.getElementById('leaveBtn');
 const roomInput = document.getElementById('room');
 
 let localStream = null;
-let pcs = {};   // peer connections keyed by peer id
-let dcs = {};   // data channels keyed by peer id
-let myId = 'peer-'+Math.random().toString(36).substr(2,6);
-let roomName = '';
+let peers = {}; // store {id: {pc, dc, videoEl}}
 
 function logStatus(msg){ statusEl.textContent = msg; }
-function addChat(msg, from='me'){ const d=document.createElement('div'); d.textContent=(from?from+': ':'')+msg; chatArea.appendChild(d); chatArea.scrollTop=chatArea.scrollHeight; }
-
-async function startLocal(){
-  localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-  localV.srcObject = localStream;
-  logStatus('Camera & mic ready');
+function addChat(msg, from='me'){ 
+  const d = document.createElement('div'); 
+  d.textContent = (from ? from + ': ' : '') + msg; 
+  chatArea.appendChild(d); 
+  chatArea.scrollTop = chatArea.scrollHeight; 
 }
 
-function makePC(peerId){
-  const _pc = new RTCPeerConnection({iceServers:stunServers});
-  localStream.getTracks().forEach(track=>_pc.addTrack(track,localStream));
+async function startLocal(){
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    localV.srcObject = localStream;
+    logStatus('Camera & mic ready');
+  } catch(e){
+    alert('Cannot access camera/mic: '+e.message);
+  }
+}
 
-  _pc.ontrack = e => {
-    if(document.getElementById('vid-'+peerId)) return;
+function createPeerConnection(peerId){
+  const pc = new RTCPeerConnection({iceServers: stunServers});
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  // video for remote peer
+  pc.ontrack = e => {
+    if(peers[peerId].videoEl) return;
     const vid = document.createElement('video');
-    vid.autoplay=true; vid.playsInline=true; vid.srcObject=e.streams[0]; vid.id='vid-'+peerId;
-    const tile = document.createElement('div'); tile.className='tile'; tile.appendChild(vid);
-    const meta = document.createElement('div'); meta.className='meta'; meta.textContent=peerId;
-    tile.appendChild(meta); grid.appendChild(tile);
+    vid.autoplay = true; vid.playsInline = true; vid.srcObject = e.streams[0];
+
+    const tile = document.createElement('div');
+    tile.className = 'tile';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = 'Peer';
+    tile.appendChild(vid);
+    tile.appendChild(meta);
+    grid.appendChild(tile);
+
+    peers[peerId].videoEl = vid;
   };
 
-  _pc.onicecandidate = async e => {
-    if(e.candidate) return; // ignore local candidates, rely on full SDP
-  };
+  pc.oniceconnectionstatechange = ()=>logStatus(`ICE ${peerId}: ${pc.iceConnectionState}`);
 
-  return _pc;
+  return pc;
 }
 
 function setupDataChannel(peerId, channel){
-  dcs[peerId] = channel;
-  channel.onopen = ()=>{ if(peerId==='first') addChat('**connected to first peer**','system'); }
-  channel.onmessage = ev => addChat(ev.data,peerId);
-  channel.onclose = ()=>logStatus('DataChannel closed for '+peerId);
+  peers[peerId].dc = channel;
+  channel.onopen = () => addChat(`**connected to ${peerId}**`, 'system');
+  channel.onmessage = ev => addChat(ev.data, `peer ${peerId}`);
 }
-
-async function joinRoom(){
-  joinBtn.style.display='none'; leaveBtn.style.display='inline-block';
-  roomName = roomInput.value.trim();
-  if(!roomName) return alert('Enter room name');
-  logStatus('Joining room '+roomName);
-
-  const { data: existing } = await supabase.from('rooms').select('*').eq('room',roomName);
-  const peersInRoom = existing || [];
-
-  for(let peer of peersInRoom){
-    if(peer.id === myId) continue;
-    const pc = makePC(peer.id);
-    pcs[peer.id] = pc;
-    pc.ondatachannel = ev => setupDataChannel(peer.id, ev.channel);
-    await pc.setRemoteDescription(JSON.parse(peer.sdp));
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    await supabase.from('rooms').update({sdp: JSON.stringify(pc.localDescription)}).eq('id',peer.id);
-  }
-
-  // insert self
-  const pcSelf = makePC(myId);
-  pcs[myId] = pcSelf;
-  const dc = pcSelf.createDataChannel('chat');
-  setupDataChannel('first', dc);
-  const offer = await pcSelf.createOffer();
-  await pcSelf.setLocalDescription(offer);
-  await supabase.from('rooms').insert([{id: myId, room: roomName, sdp: JSON.stringify(pcSelf.localDescription)}]);
-
-  // subscribe to changes in the room
-  supabase.from(`rooms:room=eq.${roomName}`).on('INSERT', payload => {
-    const peer = payload.new;
-    if(peer.id === myId) return;
-    if(pcs[peer.id]) return;
-    (async ()=>{
-      const pcNew = makePC(peer.id);
-      pcs[peer.id] = pcNew;
-      const offer = JSON.parse(peer.sdp);
-      await pcNew.setRemoteDescription(offer);
-      const ans = await pcNew.createAnswer();
-      await pcNew.setLocalDescription(ans);
-      await supabase.from('rooms').update({sdp: JSON.stringify(pcNew.localDescription)}).eq('id', peer.id);
-    })();
-  }).subscribe();
-}
-
-joinBtn.onclick = joinRoom;
-leaveBtn.onclick = ()=>{
-  for(let id in pcs){ pcs[id]?.close(); }
-  pcs={}; dcs={}; joinBtn.style.display='inline-block'; leaveBtn.style.display='none'; logStatus('Left room'); 
-};
 
 sendChatBtn.onclick = ()=>{
-  const msg = chatInput.value.trim(); if(!msg) return;
-  for(let id in dcs) if(dcs[id]?.readyState==='open') dcs[id].send(msg);
-  addChat(msg,'me'); chatInput.value='';
+  const msg = chatInput.value.trim();
+  if(!msg) return;
+  for(const p of Object.values(peers)){
+    if(p.dc && p.dc.readyState === 'open') p.dc.send(msg);
+  }
+  addChat(msg,'me');
+  chatInput.value='';
+};
+
+joinBtn.onclick = async ()=>{
+  joinBtn.style.display='none';
+  leaveBtn.style.display='inline-block';
+  const roomName = roomInput.value.trim() || `room-${Math.floor(Math.random()*1000)}`;
+  logStatus(`Joining ${roomName}`);
+
+  // generate a unique id for self
+  const myId = crypto.randomUUID();
+
+  // insert self into rooms
+  const insertResp = await supabase.from('rooms').insert([{id: myId, room: roomName, sdp: '', created_at: new Date()}]).select();
+  if(insertResp.error){ console.error('Insert failed:', insertResp.error); alert('Join failed'); return; }
+
+  // listen for new peers
+  supabase.from(`rooms:room=eq.${roomName}`).on('INSERT', async payload=>{
+    const peer = payload.new;
+    if(peer.id === myId) return; // ignore self
+
+    // create peer connection
+    peers[peer.id] = {pc: createPeerConnection(peer.id)};
+    const pc = peers[peer.id].pc;
+
+    // data channel
+    const dc = pc.createDataChannel('chat');
+    setupDataChannel(peer.id, dc);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // update SDP in table
+    await supabase.from('rooms').update({sdp: JSON.stringify(pc.localDescription)}).eq('id', peer.id);
+
+    // send answer
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await supabase.from('rooms').update({sdp: JSON.stringify(pc.localDescription)}).eq('id', peer.id);
+  }).subscribe();
+
+  // listen for updates from others
+  supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', async payload=>{
+    const peer = payload.new;
+    if(peer.id === myId) return;
+    if(!peers[peer.id]) peers[peer.id] = {pc: createPeerConnection(peer.id)};
+    const pc = peers[peer.id].pc;
+    if(peer.sdp) await pc.setRemoteDescription(JSON.parse(peer.sdp));
+  }).subscribe();
+
+  logStatus('Connected — waiting for peers...');
+};
+
+leaveBtn.onclick = ()=>{
+  for(const p of Object.values(peers)){
+    p.pc?.close();
+    if(p.videoEl) p.videoEl.remove();
+  }
+  peers={};
+  joinBtn.style.display='inline-block';
+  leaveBtn.style.display='none';
+  logStatus('Left room');
 };
 
 (async()=>{ await startLocal(); })();
 </script>
+
 </body>
 </html>
