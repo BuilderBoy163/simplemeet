@@ -242,15 +242,10 @@ const sidePanel = document.querySelector('.side');
 function updateLayout() {
   if(window.innerWidth <= 800){
     toggleBtn.style.display = 'inline-block';
-    sidePanel.style.display = 'block';
-    if(!sidePanel.classList.contains('show')){
-      sidePanel.style.transform = 'translateX(100%)';
-    }
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(140px,1fr))';
   } else {
     toggleBtn.style.display = 'none';
-    sidePanel.style.display = 'flex';
-    sidePanel.style.transform = 'translateX(0)';
+    sidePanel.classList.remove('show');
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(260px,1fr))';
   }
 }
