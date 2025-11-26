@@ -106,7 +106,7 @@ main {
         <button id="joinBtn" class="btn btn-main">Join</button>
         <button id="leaveBtn" class="btn btn-ghost" style="display:none">Leave</button>
       </div>
-      <button id="toggleSide" class="btn btn-ghost" style="display:none">Toggle Panel</button>
+      <button id="toggleSide" class="btn btn-ghost" style="display:none">☰</button>
     </header>
 
     <main>
@@ -282,8 +282,9 @@ function checkMobile() {
   }
 }
   
-window.addEventListener('resize', checkMobile);
-checkMobile();
+const toggleBtn = document.getElementById('toggleSide');
+const sidePanel = document.querySelector('.side');
+
 toggleBtn.onclick = () => {
   sidePanel.classList.toggle('show');
 };
