@@ -129,8 +129,6 @@ const acceptRemoteBtn = document.getElementById('acceptRemote');
 const chatArea = document.getElementById('chatArea');
 const chatInput = document.getElementById('chatInput');
 const sendChatBtn = document.getElementById('sendChat');
-const toggleBtn = document.getElementById('toggleSide');
-const sidePanel = document.querySelector('.side');
 
 let localStream = null;
 let pc = null;
@@ -244,7 +242,7 @@ const sidePanel = document.querySelector('.side');
 function updateLayout() {
   if(window.innerWidth <= 800){
     toggleBtn.style.display = 'inline-block';
-    sidePanel.style.display = 'block';        // always block so JS can toggle
+    sidePanel.style.display = 'block';
     if(!sidePanel.classList.contains('show')){
       sidePanel.style.transform = 'translateX(100%)';
     }
@@ -261,7 +259,7 @@ toggleBtn.addEventListener('click', ()=>{
   sidePanel.classList.toggle('show');
 });
 
-// Update layout on load and on resize
+// Run on load & resize
 updateLayout();
 window.addEventListener('resize', updateLayout);
 
