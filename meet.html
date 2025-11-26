@@ -208,12 +208,16 @@ joinBtn.onclick = async ()=>{
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
     await supabase.from('rooms').upsert({room:roomName,sdp:JSON.stringify(pc.localDescription)});
     logStatus('Created offer, waiting for answer...');
-    supabase.from('rooms').on('UPDATE',payload=>{
-      if(!isOfferer) return;
-      const ans = JSON.parse(payload.new.sdp);
-      pc.setRemoteDescription(ans);
-      logStatus('Answer received — connected!');
-    }).subscribe();
+    supabase.from(`rooms:room=eq.${roomName}`).on('UPDATE', payload => {
+      console.log('Room update!', payload)
+      if (!isOfferer) {
+          const ans = JSON.parse(payload.new.sdp);
+          pc.setRemoteDescription(ans);
+          logStatus('Answer received — connected!');
+      }
+  })
+  .subscribe();
+
   } else {
     await pc.setRemoteDescription(JSON.parse(existing.sdp));
     pc.ondatachannel=ev=>{ dc=ev.channel; setupDataChannel(dc); };
